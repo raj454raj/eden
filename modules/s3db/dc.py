@@ -59,6 +59,7 @@ class DataCollectionTemplateModel(S3Model):
 
         define_table = self.define_table
         add_components = self.add_components
+        configure = self.configure
 
         # =====================================================================
         # Data Collection Template
@@ -125,17 +126,90 @@ class DataCollectionTemplateModel(S3Model):
         # =====================================================================
         # Data Collection Question
         #
+        question_type_opts = {1: "String",
+                              2: "Integer",
+                              3: "Float",
+                              4: "Object",
+                              5: "Date",
+                              6: "Time",
+                              7: "DateTime",
+                              8: "Reference",
+                              9: "Location"}
+
+        question_type = S3ReusableField("type", "integer",
+                                        default=1,
+                                        label="Question Type",
+                                        represent = lambda opt: \
+                                            question_type_opts.get(opt, current.messages.UNKNOWN_OPT),
+                                        requires = IS_IN_SET(question_type_opts,
+                                                             zero=None),
+                                        )
+
         tablename = "dc_question"
         define_table(tablename,
                      Field("question",
+                           label=T("Question Label"),
                            requires = IS_NOT_EMPTY(),
+                           ),
+                     question_type(),
+                     Field("is_required", "boolean",
+                           default=False,
+                           label=T("Is required?"),
+                           comment=DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Is required?"),
+                                                         T("If this question needs to be answered compulsarily in the Survey Form"))),
+                           ),
+                     Field("description",
+                           label=T("Description"),
+                           comment=DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Description"),
+                                                         T("Tooltip for the question in the Survey Form"))),
+                           ),
+                     Field("default_answer",
+                           label=T("Default Answer"),
+                           ),
+                     Field("max",
+                           label=T("Maximum Value"),
+                           ),
+                     Field("min",
+                           label=T("Minimum Value"),
+                           ),
+                     Field("filter",
+                           label=T("Filter"),
+                           ),
+                     Field("reference",
+                           label="Reference Table Name"),
+                     Field("represent",
+                           label=T("Represent"),
+                           comment=DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Represent"),
+                                                         T("Represent the fields of the reference table"))),
+                           ),
+                     Field("location_fields",
+                           label=T("Location Fields"),
+                           default="[]",
+                           comment=DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Fields"),
+                                                         T("Keep a list of location fields. Example - ['L0', 'L1', 'L2']"))),
+                           ),
+                     Field("options",
+                           label=T("Options"),
+                           default="[]",
+                           comment=DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Options"),
+                                                         T("List of options for object type Question"))),
+                           ),
+                     Field("multiple", "boolean",
+                           label=T("Multiple Select"),
+                           comment=DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Multiple Select"),
+                                                         T("More than one option can be selected for object type Question"))),
                            ),
                      Field("model", "json",
                            requires = IS_EMPTY_OR(IS_JSON()),
                            # @todo: representation?
                            # @todo: widget?
                            ),
-                     s3_comments(),
                      *s3_meta_fields())
 
         # CRUD strings
@@ -151,6 +225,35 @@ class DataCollectionTemplateModel(S3Model):
             msg_record_modified = T("Question updated"),
             msg_record_deleted = T("Question deleted"),
             msg_list_empty = T("No Questions currently registered"))
+
+        # Filter Widgets
+        filter_widgets = [
+            S3TextFilter(["question",
+                          "type",
+                          ],
+                         label=T("Question Label and/or Type"),
+                         comment=T("Search for question by the Question Label "
+                                   "or by its Type")
+                         ),
+        ]
+
+        fields = ["question",
+                  "type",
+                  "is_required",
+                  "description",
+                  "default_answer",
+                  "max",
+                  "min",
+                  "filter",
+                  "reference",
+                  "represent",
+                  "location_fields",
+                  "options",
+                  "multiple",
+                  "model",
+                  ]
+
+        crud_form = S3SQLCustomForm(*fields)
 
         # Represent
         represent = S3Represent(lookup=tablename,
@@ -176,6 +279,9 @@ class DataCollectionTemplateModel(S3Model):
                        dc_question_l10n = "question_id",
                        )
 
+        configure(tablename,
+                  filter_widgets=filter_widgets,
+                  crud_form=crud_form)
         # =====================================================================
         # Template <=> Question link table
         #

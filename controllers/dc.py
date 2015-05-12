@@ -58,7 +58,6 @@ def question():
             ttable = r.component.table
             if r.method != "update":
                 ttable.question.default = record.question
-                ttable.options.default = record.options
 
             # Remove language options for which we already have
             # a translation of this question
@@ -84,6 +83,14 @@ def question():
                 requires._select = selectable
         return True
     s3.prep = prep
+
+    def postp(r, output):
+        if r.interactive and r.method != "import":
+            script = "/%s/static/scripts/S3/s3.dc_question.js" % r.application
+            s3.scripts.append(script)
+
+        return output
+    s3.postp = postp
 
     return s3_rest_controller(rheader = s3db.dc_rheader)
 
