@@ -70,6 +70,7 @@ __all__ = ("S3ACLWidget",
            "S3SliderWidget",
            "S3StringWidget",
            "S3TimeIntervalWidget",
+           "S3QuestionWidget",
            #"S3UploadWidget",
            "S3FixedOptionsWidget",
            "CheckboxesWidgetS3",
@@ -7776,6 +7777,113 @@ class S3XMLContents(object):
 
         return re.sub(r"\{\{(.+?)\}\}", self.link, self.contents)
 
+# =============================================================================
+class S3QuestionWidget(FormWidget):
+    def __init__(self):
+        pass
+    def __call__(self, field, value, **attributes):
+
+        T = current.T
+        request = current.request
+        s3 = current.response.s3
+        s3db = current.s3db
+
+        type_options = {"string": "String",
+                        "integer": "Integer",
+                        "float": "Float",
+                        "object": "Object",
+                        "date": "Date",
+                        "time": "Time",
+                        "datetime": "DateTime",
+                        "reference": "Reference",
+                        "location": "Location"
+                        }
+
+        fields = [Field("type", "text",
+                        widget=S3FixedOptionsWidget(options=type_options,
+                                                    empty=False,
+                                                    ),
+                        ),
+                  Field("is_required", "boolean",
+                        default=False,
+                        label=T("Is required?"),
+                        comment=DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Is required?"),
+                                                      T("If this question needs to be answered compulsarily in the Survey Form"))),
+                        requires=IS_NOT_EMPTY(),
+                        ),
+                  Field("description",
+                        label=T("Description"),
+                        comment=DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Description"),
+                                                      T("Tooltip for the question in the Survey Form"))),
+                        ),
+                  Field("default_answer",
+                        default="",
+                        label=T("Default Answer"),
+                        ),
+                  Field("max",
+                        label=T("Maximum Value"),
+                        ),
+                  Field("min",
+                        label=T("Minimum Value"),
+                        ),
+                  Field("filter",
+                        label=T("Filter"),
+                        ),
+                  Field("reference",
+                        label="Reference Table Name"),
+                  Field("represent",
+                        label=T("Represent"),
+                        comment=DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Represent"),
+                                                      T("Represent the fields of the reference table"))),
+                        ),
+                  Field("location_fields",
+                        label=T("Location Fields"),
+                        default="[]",
+                        comment=DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Fields"),
+                                                      T("Keep a list of location fields. Example - ['L0', 'L1', 'L2']"))),
+                        ),
+                  Field("options",
+                        label=T("Options"),
+                        default="[]",
+                        comment=DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Options"),
+                                                      T("List of options for object type Question"))),
+                        ),
+                  Field("multiple", "boolean",
+                        label=T("Multiple Select"),
+                        comment=DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Multiple Select"),
+                                                      T("More than one option can be selected for object type Question"))),
+                        )
+                 ]
+
+        labels, required = s3_mark_required(fields)
+        record_id = value if value else 0
+
+        formstyle = s3.crud.formstyle
+
+        formname = "question_embedded"
+        form = SQLFORM.factory(tablename="dc_question",
+                               formstyle=formstyle,
+                               *fields)
+        formrows = []
+        fappend = formrows.append
+
+        for formrow in form[0]:
+            if not formrow.attributes["_id"].startswith("submit_record"):
+                fappend(formrow)
+
+        if request.env.request_method == "POST":
+            # I want to create the required JSON
+            # here and then field.value = that_json
+            field.value = "hello"
+            print request.post_vars
+            print field
+        return TAG[""](formrows)
 # =============================================================================
 class ICON(I):
     """

@@ -408,7 +408,7 @@ class S3HRModel(S3Model):
                            default = 1,
                            #label = T("Type"),
                            represent = lambda opt: \
-                                       hrm_type_opts.get(opt, UNKNOWN_OPT),
+                                            hrm_type_opts.get(opt, UNKNOWN_OPT),
                            requires = IS_IN_SET(hrm_type_opts,
                                                 zero=None),
                            # Always set via the Controller we create from
@@ -442,7 +442,7 @@ class S3HRModel(S3Model):
                            default = 1,
                            label = T("Status"),
                            represent = lambda opt: \
-                            hrm_status_opts.get(opt, UNKNOWN_OPT),
+                                            hrm_status_opts.get(opt, UNKNOWN_OPT),
                            requires = IS_IN_SET(hrm_status_opts,
                                                 zero=None),
                            ),
