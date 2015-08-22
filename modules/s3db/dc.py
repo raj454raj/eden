@@ -253,7 +253,7 @@ class DataCollectionTemplateModel(S3Model):
 class DataCollectionModel(S3Model):
 
     names = ("dc_collection",
-             "dc_answer",
+             "dc_question_collection",
              )
 
     def model(self):
@@ -283,13 +283,22 @@ class DataCollectionModel(S3Model):
 
         # Configuration
         self.configure(tablename,
-                       super_entity = "doc_entity",
+                       onaccept = self.dc_collection_onaccept,
                        orderby = "dc_collection.date desc",
+                       super_entity = "doc_entity",
                        )
+
+        # Custom method for dc_collection
+        self.set_method("dc", "collection",
+                        method="answers",
+                        action=dc_AnswerMethod())
 
         # Components
         self.add_components(tablename,
-                            dc_answer = "collection_id",
+                            dc_question = {"link": "dc_question_collection",
+                                           "joinby": "collection_id",
+                                           "key": "question_id",
+                                           "actuate": "hide"},
                             )
 
         # CRUD strings
@@ -325,38 +334,78 @@ class DataCollectionModel(S3Model):
                                         )
 
         # =====================================================================
-        # Data Collection Answer
+        # Data Collection Question
         #
-        tablename = "dc_answer"
+        # The table acts like a link table between dc_collection and dc_question
+        tablename = "dc_question_collection"
         define_table(tablename,
                      collection_id(),
                      self.dc_question_id(),
                      Field("answer", "json",
-                           requires = IS_EMPTY_OR(IS_JSON()),
+                           requires=IS_EMPTY_OR(IS_JSON()),
+                           default={},
+                           readable=False,
+                           writable=False,
                            # @todo: representation? (based the question model)
                            # @todo: widget? (based the question model)
                            ),
-                     s3_comments(),
                      *s3_meta_fields())
 
+        # These CRUD strings correspond to adding question to the collection
+        # These are shown while a collection is opened
+        # Direct CRUD on dc_question_collection is not allowed
         # CRUD strings
         crud_strings[tablename] = Storage(
-            label_create = T("Create Answer"),
-            title_display = T("Answer Details"),
-            title_list = T("Answers"),
-            title_update = T("Edit Answer"),
-            title_upload = T("Import Answers"),
-            label_list_button = T("List Answers"),
-            label_delete_button = T("Delete Answer"),
-            msg_record_created = T("Answer added"),
-            msg_record_modified = T("Answer updated"),
-            msg_record_deleted = T("Answer deleted"),
-            msg_list_empty = T("No Answers currently registered"))
+            label_create = T("Add Question to Collection"),
+            title_display = T("Question Details"),
+            title_list = T("Questions"),
+            title_update = T("Edit Question"),
+            title_upload = T("Import Questions"),
+            label_list_button = T("List Questions"),
+            label_delete_button = T("Delete Question"),
+            msg_record_created = T("Question added to Collection"),
+            msg_record_modified = T("Question updated"),
+            msg_record_deleted = T("Question deleted from Collection"),
+            msg_list_empty = T("No Questions currently registered"))
 
         # =====================================================================
         # Pass names back to global scope (s3.*)
         return dict(dc_collection_id = collection_id,
                     )
+
+    # -------------------------------------------------------------------------
+    def dc_collection_onaccept(self, form):
+        """
+            Create dc_question_collection records with empty
+            answer fields.
+            Updating these records with actual answers is done
+            by answers method
+        """
+
+        db = current.db
+        qctable = db.dc_question_collection
+        ttable = db.dc_template
+        tqtable = db.dc_template_question
+
+        # Collection ID
+        record_id = form.vars.id
+
+        # Template ID
+        template_id = form.vars.template_id
+
+        # Left join query to combine dc_template and dc_template_question
+        left = [ttable.on(tqtable.template_id == ttable.id)]
+
+        questions = db(ttable.id == template_id).select(tqtable.question_id,
+                                                        left=left)
+
+        # Iterate through the questions of the selected template
+        # and add an empty dc_question_collection record
+        for question in questions:
+            answer_id = qctable.insert(collection_id=record_id,
+                                       question_id=question.question_id,
+                                       )
+        return
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -404,7 +453,8 @@ def dc_rheader(r, tabs=None):
     elif resourcename == "collection":
 
         tabs = ((T("Basic Details"), None),
-                (T("Answers"), "answer"),
+                (T("Questions"), "question"),
+                (T("Answers"), "answers"),
                 (T("Attachments"), "document"),
                 )
 
@@ -418,5 +468,101 @@ def dc_rheader(r, tabs=None):
         rheader = ""
 
     return rheader
+
+# =============================================================================
+class dc_AnswerMethod(S3Method):
+    """
+        Answer method which renders widget for
+        questions created in template or explicitly
+    """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Apply method.
+
+            @param r: the S3Request
+            @param attr: controller options for this request
+        """
+
+        s3 = current.response.s3
+        db = current.db
+        qctable = db.dc_question_collection
+        # The record id will be collection_id since
+        # Answer method is applied on the master resource
+        collection_id = r.id
+
+        # Retrieve all the questions associated with the collection
+        # Note => These will contain questions from -
+        #      1. The template selected for the collection
+        #      2. Any other records added explicitly by the
+        #         user from the Questions component
+        query = (qctable.collection_id == collection_id)
+        questions = db(query).select(qctable.question_id)
+        question_ids = map(lambda x: int(x["question_id"]), questions)
+
+        # Output to views
+        output = {}
+
+        # Widget ID
+        widget_id = "dc_answer_model"
+        output["widget_id"] = widget_id
+
+        # div that will contain the answer widget
+        placeholder_div = DIV(_id=widget_id)
+        output["placeholder_div"] = placeholder_div
+
+        self.inject_script(widget_id)
+
+        # Hidden input containing collection_id
+        input_collection_id = INPUT(_type="hidden",
+                                    _id="collection-id",
+                                    _value=collection_id)
+
+        # Hidden input containing question_ids
+        input_question_ids = INPUT(_type="hidden",
+                                   _id="question-ids",
+                                   _value=question_ids)
+
+        # Embed hidden inputs in an empty tag
+        hidden_content = TAG[""](input_collection_id, input_question_ids)
+        output["hidden_content"] = hidden_content
+
+        # Title string should be for updating a particular collection
+        output["title"] = self.crud_string(r.tablename, "title_update")
+
+        return output
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def inject_script(widget_id, options=None):
+        """
+            Inject the groupedItems script and bind it to the container
+            @param widget_id: the widget container DOM ID
+            @param options: dict with options for the widget
+            @note: options dict must be JSON-serializable
+        """
+
+        s3 = current.response.s3
+
+        scripts = s3.scripts
+        appname = current.request.application
+
+        # Inject UI widget script
+        # @ToDo: Add s3.debug condition after generating s3.ui.answer.min.js
+        script = "/%s/static/scripts/S3/s3.ui.answer.js" % appname
+        if script not in scripts:
+            scripts.append(script)
+
+        # Inject widget instantiation
+        if not options:
+            options = {}
+
+        script = """$("#%(widget_id)s").addAnswer(%(options)s)""" % \
+                    {"widget_id": widget_id,
+                     "options": json.dumps(options),
+                     }
+
+        s3.jquery_ready.append(script)
 
 # END =========================================================================

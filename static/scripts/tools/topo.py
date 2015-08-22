@@ -114,7 +114,7 @@ class OrderTablesFromDatabases(OrderTables):
         self.dbdir_str = os.path.join(appdir_str, "databases")
         if not os.path.isdir(self.dbdir_str):
             raise ValueError, "Unable to read directory %s" % self.dbdir_str
-            
+
 
     def get_table_info(self, file_str):
         """ Extracts table name and constraints from given .table file.

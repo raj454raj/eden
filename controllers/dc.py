@@ -93,11 +93,13 @@ def collection():
 
     def prep(r):
 
-        if r.record and r.component_name == "answer":
+        """
+        if r.record and r.component_name == "question":
 
             # Allow only unanswered questions
             atable = s3db.dc_answer
             qtable = s3db.dc_question
+
             left = [atable.on((atable.question_id == qtable.id) & \
                               (atable.collection_id == r.id) & \
                               (atable.deleted != True))]
@@ -108,6 +110,7 @@ def collection():
 
             # Allow only questions from the selected template
             template_id = r.record.template_id
+            print r.record
             if template_id:
                 ltable = s3db.dc_template_question
                 left.append(ltable.on((ltable.question_id == qtable.id) & \
@@ -130,7 +133,7 @@ def collection():
                                        limitby=(0, 1)).first()
                 if not row or not row[count]:
                     r.component.configure(insertable=False)
-
+        """
         return True
     s3.prep = prep
 
@@ -141,6 +144,16 @@ def template_question():
     """
         RESTful CRUD controller for options.s3json lookups
         - needed for adding questions to a template
+    """
+
+    s3.prep = lambda r: r.method == "options" and r.representation == "s3json"
+
+    return s3_rest_controller()
+
+def answer():
+    """
+        RESTful CRUD controller for options.s3json lookups
+        - needed for adding questions to a collection
     """
 
     s3.prep = lambda r: r.method == "options" and r.representation == "s3json"
